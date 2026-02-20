@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐶 DOG.EXE // CYBER WOOF DETECTOR</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Noto+Sans+TC:wght@400;700&display=swap');
+
+  :root {
+    --neon-pink: #ff2d78;
+    --neon-cyan: #00f5ff;
+    --neon-yellow: #f5ff00;
+    --neon-purple: #bf5fff;
+    --dark-bg: #050510;
+    --dark-card: #0a0a1a;
+    --grid-color: rgba(0, 245, 255, 0.06);
+    --alert-red: #ff0033;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--dark-bg);
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--neon-cyan);
+    min-height: 100vh;
+    overflow: hidden;
+    position: relative;
+    transition: background 0.3s ease;
+  }
+
+  body.dog-alert {
+    animation: redPulse 0.5s ease infinite alternate;
+  }
+
+  @keyframes redPulse {
+    from { background: #1a0005; }
+    to { background: #2d0008; }
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid-color) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Scanline effect */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.15) 2px,
+      rgba(0,0,0,0.15) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100vh;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    width: 100%;
+  }
+
+  .title {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: clamp(1.2rem, 5vw, 2rem);
+    color: var(--neon-pink);
+    text-shadow:
+      0 0 10px var(--neon-pink),
+      0 0 30px var(--neon-pink),
+      0 0 60px rgba(255,45,120,0.5);
+    letter-spacing: 4px;
+    animation: flicker 4s infinite;
+  }
+
+  .subtitle {
+    font-size: 0.7rem;
+    color: var(--neon-cyan);
+    letter-spacing: 6px;
+    opacity: 0.8;
+    text-shadow: 0 0 10px var(--neon-cyan);
+  }
+
+  @keyframes flicker {
+    0%, 96%, 100% { opacity: 1; }
+    97% { opacity: 0.4; }
+    98% { opacity: 1; }
+    99% { opacity: 0.2; }
+  }
+
+  /* Camera container */
+  .camera-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    aspect-ratio: 3/4;
+    border: 2px solid var(--neon-cyan);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow:
+      0 0 20px var(--neon-cyan),
+      inset 0 0 20px rgba(0,245,255,0.05);
+  }
+
+  .camera-wrap::before,
+  .camera-wrap::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-color: var(--neon-pink);
+    border-style: solid;
+    z-index: 10;
+  }
+  .camera-wrap::before { top: 8px; left: 8px; border-width: 2px 0 0 2px; }
+  .camera-wrap::after { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+
+  #video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    display: block;
+  }
+
+  #canvas { display: none; }
+
+  /* Overlay scan line */
+  .scan-line {
+    position: absolute;
+    top: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+    animation: scanDown 3s linear infinite;
+    z-index: 5;
+    opacity: 0.7;
+  }
+
+  @keyframes scanDown {
+    from { top: -2px; }
+    to { top: 100%; }
+  }
+
+  /* Corner labels */
+  .cam-label {
+    position: absolute;
+    font-size: 0.6rem;
+    color: var(--neon-cyan);
+    z-index: 8;
+    letter-spacing: 2px;
+    opacity: 0.7;
+  }
+  .cam-label.tl { top: 8px; left: 36px; }
+  .cam-label.tr { top: 8px; right: 36px; }
+  .cam-label.bl { bottom: 8px; left: 36px; }
+
+  /* Dog alert overlay */
+  .dog-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 0, 51, 0.25);
+    display: none;
+    z-index: 6;
+    animation: overlayPulse 0.4s ease infinite alternate;
+  }
+
+  .dog-overlay.active { display: block; }
+
+  @keyframes overlayPulse {
+    from { background: rgba(255,0,51,0.1); }
+    to { background: rgba(255,0,51,0.4); }
+  }
+
+  .dog-badge {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(2rem, 10vw, 3.5rem);
+    font-weight: 900;
+    color: var(--neon-yellow);
+    text-shadow: 0 0 30px var(--neon-yellow), 0 0 60px var(--neon-yellow);
+    animation: badgePop 0.3s ease;
+    text-align: center;
+    line-height: 1.2;
+    display: none;
+  }
+
+  .dog-badge.active { display: block; }
+
+  @keyframes badgePop {
+    from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+
+  /* Status panel */
+  .status-panel {
+    width: 100%;
+    max-width: 420px;
+    background: var(--dark-card);
+    border: 1px solid rgba(0,245,255,0.3);
+    border-radius: 4px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #333;
+    flex-shrink: 0;
+    transition: all 0.3s;
+  }
+
+  .status-dot.scanning { background: var(--neon-cyan); box-shadow: 0 0 10px var(--neon-cyan); animation: dotPulse 1s infinite; }
+  .status-dot.detected { background: var(--neon-pink); box-shadow: 0 0 15px var(--neon-pink); }
+  .status-dot.idle { background: var(--neon-purple); box-shadow: 0 0 8px var(--neon-purple); }
+
+  @keyframes dotPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .status-text {
+    font-size: 0.72rem;
+    flex: 1;
+    color: var(--neon-cyan);
+    letter-spacing: 1px;
+  }
+
+  .status-timer {
+    font-size: 0.65rem;
+    color: rgba(0,245,255,0.4);
+  }
+
+  /* Controls */
+  .controls {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .api-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .api-label {
+    font-size: 0.65rem;
+    color: var(--neon-purple);
+    letter-spacing: 2px;
+    white-space: nowrap;
+  }
+
+  .api-input {
+    flex: 1;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(191,95,255,0.4);
+    color: var(--neon-purple);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    padding: 8px 10px;
+    border-radius: 3px;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  .api-input:focus {
+    border-color: var(--neon-purple);
+    box-shadow: 0 0 10px rgba(191,95,255,0.3);
+  }
+
+  .api-input::placeholder { color: rgba(191,95,255,0.3); }
+
+  .btn-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 10px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s;
+  }
+
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .btn:hover::before { opacity: 1; }
+  .btn:active { transform: scale(0.97); }
+
+  .btn-start {
+    background: linear-gradient(135deg, #0a1628, #0d2040);
+    color: var(--neon-cyan);
+    border: 1px solid var(--neon-cyan);
+    box-shadow: 0 0 15px rgba(0,245,255,0.2);
+  }
+
+  .btn-start:hover {
+    box-shadow: 0 0 25px rgba(0,245,255,0.5);
+    background: linear-gradient(135deg, #0d2040, #163060);
+  }
+
+  .btn-stop {
+    background: linear-gradient(135deg, #1a0008, #2a000d);
+    color: var(--neon-pink);
+    border: 1px solid var(--neon-pink);
+    box-shadow: 0 0 15px rgba(255,45,120,0.2);
+  }
+
+  .btn-stop:hover {
+    box-shadow: 0 0 25px rgba(255,45,120,0.5);
+  }
+
+  /* Sensitivity slider */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .slider-label {
+    font-size: 0.6rem;
+    color: var(--neon-yellow);
+    letter-spacing: 2px;
+    white-space: nowrap;
+  }
+
+  input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 3px;
+    background: linear-gradient(90deg, var(--neon-yellow), var(--neon-pink));
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--neon-yellow);
+    box-shadow: 0 0 8px var(--neon-yellow);
+    cursor: pointer;
+  }
+
+  .slider-val {
+    font-size: 0.65rem;
+    color: var(--neon-yellow);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  /* Log */
+  .log {
+    width: 100%;
+    max-width: 420px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(0,245,255,0.15);
+    border-radius: 3px;
+    padding: 6px 10px;
+    font-size: 0.6rem;
+    color: rgba(0,245,255,0.5);
+    height: 40px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    letter-spacing: 1px;
+  }
+
+  .log span { color: var(--neon-pink); }
+
+  /* Dog alert border effect */
+  body.dog-alert .camera-wrap {
+    border-color: var(--neon-pink);
+    box-shadow: 0 0 40px var(--neon-pink), 0 0 80px rgba(255,0,51,0.3);
+    animation: borderPulse 0.3s ease infinite alternate;
+  }
+
+  @keyframes borderPulse {
+    from { box-shadow: 0 0 20px var(--neon-pink); }
+    to { box-shadow: 0 0 50px var(--neon-pink), 0 0 100px rgba(255,0,51,0.4); }
+  }
+
+  /* No camera placeholder */
+  .no-camera {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #060615;
+    z-index: 2;
+  }
+
+  .no-camera .icon { font-size: 3rem; opacity: 0.4; }
+  .no-camera .msg { font-size: 0.7rem; color: rgba(0,245,255,0.3); letter-spacing: 2px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <div class="title">🐶 DOG.EXE</div>
+    <div class="subtitle">CYBER WOOF DETECTOR v2.0.77</div>
+  </div>
+
+  <div class="camera-wrap" id="cameraWrap">
+    <div class="no-camera" id="noCam">
+      <div class="icon">📷</div>
+      <div class="msg">CAMERA OFFLINE<br>PRESS INITIALIZE</div>
+    </div>
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="scan-line" id="scanLine" style="display:none"></div>
+    <span class="cam-label tl">FRONT.CAM</span>
+    <span class="cam-label tr" id="fpsLabel">--FPS</span>
+    <span class="cam-label bl" id="modeLabel">STANDBY</span>
+    <div class="dog-overlay" id="dogOverlay"></div>
+    <div class="dog-badge" id="dogBadge">🐶<br>WOOF!</div>
+  </div>
+
+  <div class="status-panel">
+    <div class="status-dot idle" id="statusDot"></div>
+    <div class="status-text" id="statusText">系統待機中... 請輸入 API Key 並開始</div>
+    <div class="status-timer" id="timerText">--:--</div>
+  </div>
+
+  <div class="controls">
+    <div class="api-row">
+      <span class="api-label">API.KEY//</span>
+      <input type="password" class="api-input" id="apiKey" placeholder="sk-xxxxxxxxxxxxxxxx">
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">掃描間隔//</span>
+      <input type="range" id="interval" min="2" max="10" value="4">
+      <span class="slider-val" id="intervalVal">4s</span>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-start" id="btnStart" onclick="startDetection()">▶ INITIALIZE</button>
+      <button class="btn btn-stop" id="btnStop" onclick="stopDetection()">■ TERMINATE</button>
+    </div>
+  </div>
+
+  <div class="log" id="logBox">// SYSTEM READY // AWAITING INPUT //</div>
+
+</div>
+
+<audio id="barkAudio"></audio>
+
+<script>
+  // ---- State ----
+  let stream = null;
+  let detecting = false;
+  let detectLoop = null;
+  let startTime = null;
+  let timerLoop = null;
+  let lastDogTime = 0;
+  let dogCooldown = 3000;
+
+  // ---- UI refs ----
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const timerText = document.getElementById('timerText');
+  const dogOverlay = document.getElementById('dogOverlay');
+  const dogBadge = document.getElementById('dogBadge');
+  const logBox = document.getElementById('logBox');
+  const noCam = document.getElementById('noCam');
+  const scanLine = document.getElementById('scanLine');
+  const modeLabel = document.getElementById('modeLabel');
+  const intervalSlider = document.getElementById('interval');
+  const intervalVal = document.getElementById('intervalVal');
+
+  intervalSlider.addEventListener('input', () => {
+    intervalVal.textContent = intervalSlider.value + 's';
+  });
+
+  // ---- Dog bark sound (Web Audio API, no external file needed) ----
+  function playBark() {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ac = new AudioContext();
+
+    function beep(start) {
+      const osc = ac.createOscillator();
+      const g = ac.createGain();
+      osc.connect(g); g.connect(ac.destination);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(1800, ac.currentTime + start);
+      g.gain.setValueAtTime(0.8, ac.currentTime + start);
+      g.gain.setValueAtTime(0, ac.currentTime + start + 0.12);
+      osc.start(ac.currentTime + start);
+      osc.stop(ac.currentTime + start + 0.13);
+    }
+
+    beep(0);
+    beep(0.18);
+    beep(0.36);
+  }
+
+  // ---- Log ----
+  function log(msg, isAlert = false) {
+    const ts = new Date().toTimeString().slice(0,8);
+    logBox.innerHTML = isAlert
+      ? `[${ts}] <span>⚠ ${msg}</span>`
+      : `[${ts}] // ${msg} //`;
+  }
+
+  // ---- Camera ----
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      video.srcObject = stream;
+      noCam.style.display = 'none';
+      scanLine.style.display = 'block';
+      return true;
+    } catch (e) {
+      log('鏡頭存取失敗: ' + e.message);
+      setStatus('idle', '鏡頭存取失敗');
+      return false;
+    }
+  }
+
+  function stopCamera() {
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+    noCam.style.display = 'flex';
+    scanLine.style.display = 'none';
+  }
+
+  // ---- Status ----
+  function setStatus(type, text) {
+    statusDot.className = 'status-dot ' + type;
+    statusText.textContent = text;
+  }
+
+  // ---- Timer ----
+  function startTimer() {
+    startTime = Date.now();
+    timerLoop = setInterval(() => {
+      const s = Math.floor((Date.now() - startTime) / 1000);
+      const m = Math.floor(s / 60).toString().padStart(2,'0');
+      const sec = (s % 60).toString().padStart(2,'0');
+      timerText.textContent = m + ':' + sec;
+    }, 1000);
+  }
+
+  // ---- Capture frame as base64 ----
+  function captureFrame() {
+    canvas.width = 320;
+    canvas.height = 240;
+    ctx.drawImage(video, 0, 0, 320, 240);
+    return canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+  }
+
+  // ---- Call OpenAI Vision ----
+  async function analyzeFrame(apiKey, base64Image) {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        max_tokens: 50,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: 'data:image/jpeg;base64,' + base64Image, detail: 'low' }
+            },
+            {
+              type: 'text',
+              text: 'Is there a dog (or multiple dogs) visible and moving in this image? Reply only: YES or NO.'
+            }
+          ]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || 'API error');
+    }
+
+    const data = await response.json();
+    const answer = data.choices?.[0]?.message?.content?.trim().toUpperCase() || 'NO';
+    return answer.includes('YES');
+  }
+
+  // ---- Discord Webhook ----
+  async function sendDiscordNotification() {
+    const webhookUrl = 'https://discordapp.com/api/webhooks/1474347472351395915/rnpyYAkXBqCuM3nwPxHz1oZ2NjKE6ehTH-DK9nisDIHsG-54Kven9pEfs0gVZ2j8Xdh6';
+    const now = new Date().toLocaleTimeString('zh-TW');
+    try {
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: '🐶 **偵測到狗狗！** WOOF WOOF！\n🕐 時間：' + now + '\n🚨 DOG.EXE CYBER WOOF DETECTOR 警報'
+        })
+      });
+      log('Discord 通知已發送！');
+    } catch (e) {
+      log('Discord 通知失敗: ' + e.message, true);
+    }
+  }
+
+  // ---- Dog detected! ----
+  function triggerDogAlert() {
+    const now = Date.now();
+    if (now - lastDogTime < dogCooldown) return;
+    lastDogTime = now;
+
+    document.body.classList.add('dog-alert');
+    dogOverlay.classList.add('active');
+    dogBadge.classList.add('active');
+    modeLabel.textContent = '🐶 DOG DETECTED';
+    log('偵測到狗！ WOOF WOOF！', true);
+    playBark();
+    sendDiscordNotification();
+
+    setTimeout(() => {
+      document.body.classList.remove('dog-alert');
+      dogOverlay.classList.remove('active');
+      dogBadge.classList.remove('active');
+      if (detecting) {
+        modeLabel.textContent = 'SCANNING';
+        setStatus('scanning', '繼續掃描中...');
+      }
+    }, dogCooldown);
+  }
+
+  // ---- Main detection loop ----
+  async function runDetection() {
+    if (!detecting) return;
+
+    const apiKey = document.getElementById('apiKey').value.trim();
+    if (!apiKey) {
+      log('缺少 API Key！');
+      return;
+    }
+
+    setStatus('scanning', '分析畫面中...');
+    log('傳送畫面至 OpenAI Vision...');
+
+    try {
+      const base64 = captureFrame();
+      const hasDog = await analyzeFrame(apiKey, base64);
+
+      if (hasDog) {
+        setStatus('detected', '🐶 偵測到狗！');
+        triggerDogAlert();
+      } else {
+        setStatus('scanning', '掃描中... 未偵測到狗');
+        log('未偵測到狗，繼續掃描');
+      }
+    } catch (e) {
+      log('API 錯誤: ' + e.message, true);
+      setStatus('idle', 'API 錯誤，請檢查 Key');
+    }
+  }
+
+  // ---- Start / Stop ----
+  async function startDetection() {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    if (!apiKey) {
+      log('請先輸入 OpenAI API Key！', true);
+      setStatus('idle', '⚠ 請輸入 API Key');
+      return;
+    }
+
+    if (detecting) return;
+
+    setStatus('scanning', '啟動鏡頭...');
+    log('初始化系統...');
+
+    const ok = await startCamera();
+    if (!ok) return;
+
+    detecting = true;
+    modeLabel.textContent = 'SCANNING';
+    setStatus('scanning', '掃描中... 尋找狗狗');
+    log('系統啟動！開始偵測狗狗');
+    startTimer();
+
+    const secs = parseInt(intervalSlider.value) * 1000;
+    runDetection();
+    detectLoop = setInterval(runDetection, secs);
+  }
+
+  function stopDetection() {
+    detecting = false;
+    clearInterval(detectLoop);
+    clearInterval(timerLoop);
+    stopCamera();
+    document.body.classList.remove('dog-alert');
+    dogOverlay.classList.remove('active');
+    dogBadge.classList.remove('active');
+    modeLabel.textContent = 'STANDBY';
+    setStatus('idle', '系統已停止');
+    timerText.textContent = '--:--';
+    log('系統已終止');
+  }
+</script>
+
+</body>
+</html>
